@@ -1,0 +1,2 @@
+vault_domain = "vault.cantalay.com"
+storage_class = "local-path"

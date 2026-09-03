@@ -1,0 +1,5 @@
+vault:
+  server: https://vault.example.com
+  path: kv
+  authMount: kubernetes
+  role: external-secrets
