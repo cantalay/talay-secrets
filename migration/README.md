@@ -8,6 +8,8 @@ Two encrypted recovery artifacts were captured outside every Git repository:
 
 - `legacy-vault-raft-sealed-2026-09-04.tar.gz.gpg`: the complete sealed `/vault/data` directory.
 - `legacy-terraform-states-2026-09-04.json.gpg`: the four Kubernetes-backend Terraform state Secrets.
+- `legacy-postgresql-all-2026-09-04.sql.gz.gpg`: all PostgreSQL databases, roles and schemas without role-password hashes.
+- `legacy-redis-2026-09-04.rdb.gpg`: a point-in-time Redis RDB stream.
 
 They are stored under `/home/cant/Documents/Codex/2026-09-03/vault-migration-private` with mode `0600`. Their symmetric encryption password is stored in the OS keyring under attributes `service=talay-vault-migration` and `backup=legacy-2026-09-04`; it is not stored in Git.
 
