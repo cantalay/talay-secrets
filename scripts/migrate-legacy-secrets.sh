@@ -3,6 +3,8 @@ set -euo pipefail
 umask 077
 
 destination_mount=${DEST_KV_MOUNT:-kv}
+destination_postgres_host=${DEST_POSTGRES_HOST:-postgresql.data.svc.cluster.local}
+destination_keycloak_base_url=${DEST_KEYCLOAK_BASE_URL:-https://auth.cantalay.com}
 migration_apply=${MIGRATION_APPLY:-false}
 source_mode=${MIGRATION_SOURCE:-cluster}
 legacy_backup_dir=${LEGACY_BACKUP_DIR:-/home/cant/Documents/Codex/2026-09-03/vault-migration-private}
@@ -141,6 +143,34 @@ kubernetes_secret_data() {
       '
 }
 
+legacy_vault_secret_data() {
+  local path=$1
+  local state_secret
+  local secret_data
+
+  for state_secret in tfstate-default-app-state tfstate-default-infra-state; do
+    secret_data=$(
+      state_payload "$state_secret" \
+        | jq -c --arg path "$path" '
+            first(
+              .resources[]?
+              | select(.mode == "data" and .type == "vault_kv_secret_v2")
+              | .instances[]?.attributes
+              | select(.name == $path)
+              | .data
+            ) // empty
+          '
+    )
+    if [[ -n "$secret_data" ]]; then
+      printf '%s\n' "$secret_data"
+      return
+    fi
+  done
+
+  printf 'Legacy Vault path was not found in Terraform state: %s\n' "$path" >&2
+  return 1
+}
+
 put_secret() {
   local path=$1
   local json_data=$2
@@ -205,8 +235,8 @@ redis_json=$(kubernetes_secret_data redis redis \
 put_secret platform/redis "$redis_json"
 unset redis_json
 
-keycloak_json=$(kubernetes_secret_data keycloak keycloak-secrets \
-  | jq -c '{username: .KEYCLOAK_ADMIN_USER, password: .KEYCLOAK_ADMIN_PASSWORD}')
+keycloak_json=$(legacy_vault_secret_data keycloak/admin \
+  | jq -c '{username: .KEYCLOAK_ADMIN_USER, password: .KEYCLOAK_ADMIN_PASS}')
 put_secret platform/keycloak "$keycloak_json"
 unset keycloak_json
 
@@ -222,10 +252,25 @@ unset alertmanager_json
 
 todogi_json=$(kubernetes_secret_data todogi-be todogi-backend-secrets)
 put_secret todogi/backend "$todogi_json"
+todogi_destination_json=$(jq -c \
+  --arg postgres_host "$destination_postgres_host" \
+  --arg keycloak_base_url "$destination_keycloak_base_url" '
+    .POSTGRE_DB_HOST = $postgres_host
+    | .KEYCLOAK_ISSUER_URI |= sub("^https?://[^/]+(/auth)?"; $keycloak_base_url)
+  ' <<<"$todogi_json")
+put_secret apps/todogi/backend "$todogi_destination_json"
+unset todogi_destination_json
 unset todogi_json
 
 todogi_keycloak_json=$(kubernetes_secret_data gateway auth-gateway-secrets)
 put_secret keycloak/todogi "$todogi_keycloak_json"
+todogi_keycloak_destination_json=$(jq -c \
+  --arg keycloak_base_url "$destination_keycloak_base_url" '
+    .KEYCLOAK_BASE_URL = $keycloak_base_url
+    | .KEYCLOAK_ISSUER_URI |= sub("^https?://[^/]+(/auth)?"; $keycloak_base_url)
+  ' <<<"$todogi_keycloak_json")
+put_secret apps/todogi/keycloak "$todogi_keycloak_destination_json"
+unset todogi_keycloak_destination_json
 unset todogi_keycloak_json
 
 if [[ "$migration_apply" == true ]]; then

@@ -121,6 +121,9 @@ resource "helm_release" "external_secrets" {
   timeout = 600
 
   values = [yamlencode({
+    global = {
+      repository = "oci.external-secrets.io/external-secrets/external-secrets"
+    }
     installCRDs       = true
     priorityClassName = "talay-platform-critical"
     serviceMonitor = {

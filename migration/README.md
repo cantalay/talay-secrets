@@ -4,13 +4,14 @@
 
 The legacy Vault is initialized and uses integrated Raft, but it is sealed. No unseal key or root token was found in Kubernetes Secrets, environment variables or shell history. Vault cannot expose mounts, policies or live KV data until an authorized operator supplies the unseal material.
 
-Five encrypted recovery artifacts were captured outside every Git repository:
+Six encrypted recovery artifacts were captured outside every Git repository:
 
 - `legacy-vault-raft-sealed-2026-09-04.tar.gz.gpg`: the complete sealed `/vault/data` directory.
 - `legacy-terraform-states-2026-09-04.json.gpg`: the four Kubernetes-backend Terraform state Secrets.
 - `legacy-postgresql-all-2026-09-04.sql.gz.gpg`: all PostgreSQL databases, roles and schemas without role-password hashes.
 - `legacy-redis-2026-09-04.rdb.gpg`: a point-in-time Redis RDB stream.
 - `legacy-kubernetes-secrets-2026-09-04.json.gpg`: all 61 legacy Kubernetes Secret objects, including metadata and encrypted data fields.
+- `legacy-k3s-config-2026-09-04.tar.gz.gpg`: the legacy K3s server configuration required for forensic recovery.
 
 They are stored under `/home/cant/Documents/Codex/2026-09-03/vault-migration-private` with mode `0600`. Their symmetric encryption password is stored in the OS keyring under attributes `service=talay-vault-migration` and `backup=legacy-2026-09-04`; it is not stored in Git.
 
@@ -54,6 +55,10 @@ MIGRATION_SOURCE=encrypted-backup MIGRATION_APPLY=true ./scripts/migrate-legacy-
 ```
 
 The script does not export plaintext bundles. It reads each source value into process memory, writes a mode `0600` temporary file only for the duration of one `vault kv put`, then securely removes it. It preserves the four legacy Vault paths visible in Terraform state and also writes normalized `platform/*` paths required by the new architecture.
+
+Todogi'nin legacy `todogi/backend` ve `keycloak/todogi` yolları da değişmeden korunur. Yeni deployment'lar `apps/todogi/backend` ve `apps/todogi/keycloak` yollarını kullanır; bu kopyalarda PostgreSQL hostu varsayılan olarak `postgresql.data.svc.cluster.local`, Keycloak tabanı da `https://auth.cantalay.com` olacak şekilde yeni servis topolojisine uyarlanır. Farklı hedefler için migration sırasında `DEST_POSTGRES_HOST` ve `DEST_KEYCLOAK_BASE_URL` verilebilir.
+
+For `platform/keycloak`, the legacy Terraform `keycloak/admin` record is authoritative. The old Kubernetes `keycloak-secrets` username belongs to the `monitoring` realm and is not a valid `master` realm administrator after database restore.
 
 After migration, compare destination path/key inventory with [`legacy-inventory.yaml`](legacy-inventory.yaml), start External Secrets Operator reconciliation, and validate workloads before revoking the migration token.
 

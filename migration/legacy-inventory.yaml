@@ -48,7 +48,7 @@ normalizedDestinationSecrets:
     source: kubernetes/redis/redis
     keys: [redis-password]
   - path: platform/keycloak
-    source: kubernetes/keycloak/keycloak-secrets
+    source: terraform-state/keycloak/admin
     keys: [username, password]
   - path: platform/grafana
     source: kubernetes/monitoring/kube-prometheus-stack-grafana
@@ -56,6 +56,13 @@ normalizedDestinationSecrets:
   - path: platform/alertmanager
     source: kubernetes/monitoring/alertmanager-kube-prometheus-stack-alertmanager
     keys: [config]
+  - path: apps/todogi/backend
+    source: kubernetes/todogi-be/todogi-backend-secrets
+    transforms: [postgres-host, keycloak-base-url]
+  - path: apps/todogi/keycloak
+    source: kubernetes/gateway/auth-gateway-secrets
+    transforms: [keycloak-base-url]
+preservedWorkloadSecrets:
   - path: keycloak/todogi
     source: kubernetes/gateway/auth-gateway-secrets
   - path: todogi/backend

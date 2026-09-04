@@ -5,7 +5,7 @@ variable "kubeconfig_path" {
 
 variable "vault_address" {
   description = "Terraform Vault provider endpoint; a local port-forward can be used during bootstrap."
-  type = string
+  type        = string
 }
 
 variable "vault_cluster_address" {
