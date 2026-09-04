@@ -63,7 +63,7 @@ resource "helm_release" "cluster_secret_store" {
 
   values = [yamlencode({
     vault = {
-      server    = var.vault_address
+      server    = var.vault_cluster_address
       path      = vault_mount.platform.path
       authMount = vault_auth_backend.kubernetes.path
       role      = vault_kubernetes_auth_backend_role.external_secrets.role_name

@@ -4,7 +4,14 @@ variable "kubeconfig_path" {
 }
 
 variable "vault_address" {
+  description = "Terraform Vault provider endpoint; a local port-forward can be used during bootstrap."
   type = string
+}
+
+variable "vault_cluster_address" {
+  description = "Vault address used by External Secrets Operator from inside the cluster."
+  type        = string
+  default     = "http://vault-active.vault.svc.cluster.local:8200"
 }
 
 variable "kubernetes_host" {

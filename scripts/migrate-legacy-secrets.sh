@@ -4,8 +4,13 @@ umask 077
 
 destination_mount=${DEST_KV_MOUNT:-kv}
 migration_apply=${MIGRATION_APPLY:-false}
+source_mode=${MIGRATION_SOURCE:-cluster}
+legacy_backup_dir=${LEGACY_BACKUP_DIR:-/home/cant/Documents/Codex/2026-09-03/vault-migration-private}
+legacy_state_backup=${LEGACY_STATE_BACKUP:-$legacy_backup_dir/legacy-terraform-states-2026-09-04.json.gpg}
+legacy_kubernetes_backup=${LEGACY_KUBERNETES_BACKUP:-$legacy_backup_dir/legacy-kubernetes-secrets-2026-09-04.json.gpg}
 temporary_files=()
 kubectl_args=()
+backup_passphrase=
 
 if [[ -n "${SOURCE_KUBECONFIG:-}" ]]; then
   kubectl_args+=(--kubeconfig "$SOURCE_KUBECONFIG")
@@ -25,6 +30,7 @@ cleanup() {
       rm -f "$temporary_file"
     fi
   done
+  unset backup_passphrase
 }
 trap cleanup EXIT INT TERM
 
@@ -32,12 +38,46 @@ kctl() {
   kubectl "${kubectl_args[@]}" "$@"
 }
 
-for command_name in kubectl jq base64 gzip; do
+for command_name in jq base64 gzip; do
   command -v "$command_name" >/dev/null || {
     printf 'Required command is missing: %s\n' "$command_name" >&2
     exit 1
   }
 done
+
+case "$source_mode" in
+  cluster)
+    command -v kubectl >/dev/null || {
+      printf 'Required command is missing: kubectl\n' >&2
+      exit 1
+    }
+    ;;
+  encrypted-backup)
+    for command_name in gpg secret-tool; do
+      command -v "$command_name" >/dev/null || {
+        printf 'Required command is missing: %s\n' "$command_name" >&2
+        exit 1
+      }
+    done
+    [[ -r "$legacy_state_backup" ]] || {
+      printf 'Encrypted Terraform state backup is not readable: %s\n' "$legacy_state_backup" >&2
+      exit 1
+    }
+    [[ -r "$legacy_kubernetes_backup" ]] || {
+      printf 'Encrypted Kubernetes Secret backup is not readable: %s\n' "$legacy_kubernetes_backup" >&2
+      exit 1
+    }
+    backup_passphrase=$(secret-tool lookup service talay-vault-migration backup legacy-2026-09-04)
+    [[ -n "$backup_passphrase" ]] || {
+      printf 'Backup passphrase was not found in the OS keyring.\n' >&2
+      exit 1
+    }
+    ;;
+  *)
+    printf 'MIGRATION_SOURCE must be cluster or encrypted-backup.\n' >&2
+    exit 1
+    ;;
+esac
 
 case "$migration_apply" in
   true | false) ;;
@@ -64,7 +104,20 @@ fi
 
 state_payload() {
   local state_secret=$1
-  kctl -n terraform-states get secret "$state_secret" -o jsonpath='{.data.tfstate}' \
+  if [[ "$source_mode" == cluster ]]; then
+    kctl -n terraform-states get secret "$state_secret" -o jsonpath='{.data.tfstate}' \
+      | base64 --decode \
+      | gzip --decompress
+    return
+  fi
+
+  gpg --batch --quiet --decrypt --pinentry-mode loopback --passphrase-fd 3 \
+    "$legacy_state_backup" 3<<<"$backup_passphrase" \
+    | jq -er --arg secret "$state_secret" '
+        .items[]
+        | select(.metadata.namespace == "terraform-states" and .metadata.name == $secret)
+        | .data.tfstate
+      ' \
     | base64 --decode \
     | gzip --decompress
 }
@@ -72,8 +125,20 @@ state_payload() {
 kubernetes_secret_data() {
   local namespace=$1
   local secret_name=$2
-  kctl -n "$namespace" get secret "$secret_name" -o json \
-    | jq -c '.data | with_entries(.value |= @base64d)'
+  if [[ "$source_mode" == cluster ]]; then
+    kctl -n "$namespace" get secret "$secret_name" -o json \
+      | jq -c '.data | with_entries(.value |= @base64d)'
+    return
+  fi
+
+  gpg --batch --quiet --decrypt --pinentry-mode loopback --passphrase-fd 3 \
+    "$legacy_kubernetes_backup" 3<<<"$backup_passphrase" \
+    | jq -ec --arg namespace "$namespace" --arg secret "$secret_name" '
+        .items[]
+        | select(.metadata.namespace == $namespace and .metadata.name == $secret)
+        | .data
+        | with_entries(.value |= @base64d)
+      '
 }
 
 put_secret() {
