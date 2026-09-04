@@ -1,0 +1,67 @@
+observedAt: "2026-09-04"
+sourceCluster:
+  apiServer: https://45.87.80.10:6443
+  context: default
+vault:
+  namespace: vault
+  pod: vault-0
+  version: 1.20.4
+  storage: raft
+  initialized: true
+  sealed: true
+  pvc: data-vault-0
+  pvcSize: 10Gi
+  knownKvV2Secrets:
+    - path: keycloak/todogi
+      keys:
+        - KEYCLOAK_ADMIN_CLIENT_ID
+        - KEYCLOAK_ADMIN_CLIENT_SECRET
+        - KEYCLOAK_BASE_URL
+        - KEYCLOAK_ISSUER_URI
+        - KEYCLOAK_REALM
+    - path: keycloak/admin
+      keys:
+        - KEYCLOAK_ADMIN_PASS
+        - KEYCLOAK_ADMIN_USER
+        - KEYCLOAK_DB_PASS
+        - KEYCLOAK_DB_TYPE
+        - KEYCLOAK_DB_URL
+        - KEYCLOAK_DB_USERNAME
+    - path: todogi/backend
+      keys:
+        - KEYCLOAK_ISSUER_URI
+        - POSTGRE_DB_HOST
+        - POSTGRE_DB_NAME
+        - POSTGRE_DB_PASSWORD
+        - POSTGRE_DB_PORT
+        - POSTGRE_DB_SCHEMA
+        - POSTGRE_DB_USERNAME
+    - path: monitoring/grafana
+      keys:
+        - client_secret
+        - initial_password
+normalizedDestinationSecrets:
+  - path: platform/postgresql
+    source: kubernetes/database/postgresql
+    keys: [postgres-password, password]
+  - path: platform/redis
+    source: kubernetes/redis/redis
+    keys: [redis-password]
+  - path: platform/keycloak
+    source: kubernetes/keycloak/keycloak-secrets
+    keys: [username, password]
+  - path: platform/grafana
+    source: kubernetes/monitoring/kube-prometheus-stack-grafana
+    keys: [admin-user, admin-password]
+  - path: platform/alertmanager
+    source: kubernetes/monitoring/alertmanager-kube-prometheus-stack-alertmanager
+    keys: [config]
+  - path: keycloak/todogi
+    source: kubernetes/gateway/auth-gateway-secrets
+  - path: todogi/backend
+    source: kubernetes/todogi-be/todogi-backend-secrets
+excludedFromLogicalMigration:
+  - TLS private keys and certificates; cert-manager must reissue them.
+  - Vault leases, client tokens and transient internal state.
+  - PostgreSQL, Redis and application persistent data; use data-layer backups.
+  - Terraform backend state; preserve it as audit/recovery input, do not import it as new state.

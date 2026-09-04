@@ -5,3 +5,6 @@
 *.tfvars
 *.auto.tfvars
 !*.auto.tfvars.example
+migration-private/
+*.snapshot
+*.gpg
