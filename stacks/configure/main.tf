@@ -52,6 +52,57 @@ resource "vault_kubernetes_auth_backend_role" "external_secrets" {
   token_max_ttl                    = 7200
 }
 
+resource "vault_policy" "platform_admin" {
+  name = "platform-admin"
+
+  policy = <<-EOT
+    path "*" {
+      capabilities = ["create", "read", "update", "patch", "delete", "list", "sudo"]
+    }
+  EOT
+}
+
+resource "vault_jwt_auth_backend" "oidc" {
+  type        = "oidc"
+  path        = "oidc"
+  description = "Keycloak OIDC for Talay platform administrators"
+
+  oidc_discovery_url = var.oidc_discovery_url
+  oidc_client_id     = var.oidc_client_id
+  default_role       = "platform-admin"
+
+  oidc_client_secret_wo         = var.oidc_client_secret
+  oidc_client_secret_wo_version = var.oidc_client_secret_version
+
+  tune {
+    listing_visibility = "unauth"
+  }
+}
+
+resource "vault_jwt_auth_backend_role" "platform_admin" {
+  backend   = vault_jwt_auth_backend.oidc.path
+  role_name = "platform-admin"
+  role_type = "oidc"
+
+  bound_audiences = [var.oidc_client_id]
+  bound_claims = {
+    groups = "talay-platform-admins"
+  }
+
+  user_claim   = "preferred_username"
+  groups_claim = "groups"
+  oidc_scopes  = ["profile", "email"]
+
+  allowed_redirect_uris = [
+    "${trimsuffix(var.vault_public_url, "/")}/ui/vault/auth/oidc/oidc/callback",
+    "http://localhost:8250/oidc/callback",
+  ]
+
+  token_policies = [vault_policy.platform_admin.name]
+  token_ttl      = 3600
+  token_max_ttl  = 28800
+}
+
 resource "helm_release" "cluster_secret_store" {
   name      = "vault-cluster-secret-store"
   namespace = "external-secrets"

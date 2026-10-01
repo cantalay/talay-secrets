@@ -1,2 +1,8 @@
 vault_address         = "http://127.0.0.1:8200"
 vault_cluster_address = "http://vault-active.vault.svc.cluster.local:8200"
+vault_public_url      = "https://vault.cantalay.com"
+oidc_discovery_url    = "https://auth.cantalay.com/realms/monitoring"
+oidc_client_id        = "talay-vault"
+
+# Supply the confidential client secret at runtime; never commit it:
+# TF_VAR_oidc_client_secret="..." terraform plan
