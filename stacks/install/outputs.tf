@@ -1,5 +1,5 @@
 output "vault_address" {
-  value = "https://${var.vault_domain}"
+  value = module.vault.address
 }
 
 output "vault_initialize_command" {

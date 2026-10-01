@@ -1,7 +1,7 @@
 output "cluster_secret_store_name" {
-  value = "vault"
+  value = module.vault_configuration.cluster_secret_store_name
 }
 
 output "kv_mount_path" {
-  value = vault_mount.platform.path
+  value = module.vault_configuration.kv_mount_path
 }
