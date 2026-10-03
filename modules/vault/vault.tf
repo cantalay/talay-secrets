@@ -75,7 +75,7 @@ resource "helm_release" "vault" {
         tls              = [{ secretName = "vault-tls", hosts = [var.domain] }]
       }
       resources = {
-        requests = { cpu = "100m", memory = "256Mi" }
+        requests = { cpu = "50m", memory = "256Mi" }
         limits   = { memory = "512Mi" }
       }
     }
