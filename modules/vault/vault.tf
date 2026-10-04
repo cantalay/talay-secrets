@@ -74,12 +74,20 @@ resource "helm_release" "vault" {
         hosts            = [{ host = var.domain, paths = ["/"] }]
         tls              = [{ secretName = "vault-tls", hosts = [var.domain] }]
       }
+      # Varsayılan readiness 5 sn'de bir `vault status` exec ediyor; aynı kontrol (sealed → 503 → not ready) HTTP ile.
+      readinessProbe = {
+        enabled          = true
+        path             = "/v1/sys/health?standbyok=true"
+        periodSeconds    = 10
+        timeoutSeconds   = 5
+        failureThreshold = 3
+      }
       resources = {
         requests = { cpu = "50m", memory = "256Mi" }
         limits   = { memory = "512Mi" }
       }
     }
-    ui = { enabled = true }
+    ui              = { enabled = true }
     serverTelemetry = { serviceMonitor = { enabled = false } }
   })]
 }
