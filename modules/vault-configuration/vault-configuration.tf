@@ -22,7 +22,7 @@ resource "vault_kubernetes_auth_backend_config" "cluster" {
 }
 
 resource "vault_policy" "external_secrets" {
-  name = "external-secrets-read"
+  name   = "external-secrets-read"
   policy = <<-EOT
     path "${vault_mount.platform.path}/data/*" {
       capabilities = ["read"]
@@ -44,8 +44,28 @@ resource "vault_kubernetes_auth_backend_role" "external_secrets" {
   token_max_ttl                    = 7200
 }
 
+# Host-level nightly backup (talay-backup.service on the node) takes raft snapshots only.
+resource "vault_policy" "raft_snapshot" {
+  name   = "raft-snapshot"
+  policy = <<-EOT
+    path "sys/storage/raft/snapshot" {
+      capabilities = ["read"]
+    }
+  EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "vault_backup" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "vault-backup"
+  bound_service_account_names      = ["vault-backup"]
+  bound_service_account_namespaces = ["vault"]
+  token_policies                   = [vault_policy.raft_snapshot.name]
+  token_ttl                        = 600
+  token_max_ttl                    = 600
+}
+
 resource "vault_policy" "platform_admin" {
-  name = "platform-admin"
+  name   = "platform-admin"
   policy = <<-EOT
     path "*" {
       capabilities = ["create", "read", "update", "patch", "delete", "list", "sudo"]
