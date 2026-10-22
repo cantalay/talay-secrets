@@ -44,6 +44,31 @@ resource "vault_kubernetes_auth_backend_role" "external_secrets" {
   token_max_ttl                    = 7200
 }
 
+# Notify (merkezi bildirim servisi) sağlayıcı kimlik bilgilerini (APNs, FCM, SMTP, SMS, Telegram, VAPID) çalışma anında
+# okur: panelden yalnız notify/providers/ altındaki yollar seçilebilir. Yazma yetkisi yok.
+resource "vault_policy" "notify_providers" {
+  name   = "notify-providers-read"
+  policy = <<-EOT
+    path "${vault_mount.platform.path}/data/notify/providers/*" {
+      capabilities = ["read"]
+    }
+
+    path "${vault_mount.platform.path}/metadata/notify/providers/*" {
+      capabilities = ["read", "list"]
+    }
+  EOT
+}
+
+resource "vault_kubernetes_auth_backend_role" "notify" {
+  backend                          = vault_auth_backend.kubernetes.path
+  role_name                        = "notify"
+  bound_service_account_names      = ["notify-api", "notify-worker"]
+  bound_service_account_namespaces = ["notify-api", "notify-worker"]
+  token_policies                   = [vault_policy.notify_providers.name]
+  token_ttl                        = 3600
+  token_max_ttl                    = 14400
+}
+
 # Host-level nightly backup (talay-backup.service on the node) takes raft snapshots only.
 resource "vault_policy" "raft_snapshot" {
   name   = "raft-snapshot"
